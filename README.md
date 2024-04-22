@@ -1,2 +1,2 @@
 # start_replica_assistant
-A script to assist in starting replication again when there are errors.
+A script to assist in restarting replication when there are errors.
