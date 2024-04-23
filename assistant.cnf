@@ -7,7 +7,7 @@
 
 # In almost all cases, it is best to run the Start Replica Assistant as root@localhost.
 
-# The group name must be [conn_pool_sim]
+# The group name must be [start_replica_assistant]
 [start_replica_assistant]
 # user = admin
 # password = "password"

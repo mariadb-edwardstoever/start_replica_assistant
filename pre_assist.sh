@@ -33,7 +33,7 @@ printf "This script can be run without options. Not indicating an option value w
                         # Skipping multiples will speed up the process of finding the first transaction 
                         # that does not fail. Skipping multiples can also lead to skipping transactions 
                         # that would otherwise succeed. For more details, review the file README.md.
-  --milliseconds        # Pause between each error skipped in miliseconds. Default 50.
+  --milliseconds=75     # Pause between each error skipped in miliseconds. Default 50.
   --nocolor             # Do not display with color letters
   --nolog               # Do not write a logfile into directory ${TMPDIR}
   --bypass_priv_check   # Bypass the check that the database user has sufficient privileges.
@@ -244,7 +244,7 @@ fi
 }
 
 function skip_this_err(){
-SKIP_SQL="set global sql_slave_skip_counter=(1 * ${MLTP}); start slave; do sleep(${MLLS}/1000);" 
+SKIP_SQL="set global sql_slave_skip_counter=${MLTP}; start slave; do sleep(${MLLS}/1000);" 
 if [ "$IO_ERRNO" == "0" ]; then
   case "$SQL_ERRNO" in
     "1950")
@@ -508,7 +508,8 @@ if [ -z $CMD_MARIADB ]; then
 fi
 
 if [ -z $CMD_MY_PRINT_DEFAULTS ]; then
-  die "my_print_defaults command not available."
+#  die "my_print_defaults command not available."
+  CMD_MY_PRINT_DEFAULTS=${SCRIPT_DIR}/bin/my_print_defaults
 fi
 
 CLOPTS=$($CMD_MY_PRINT_DEFAULTS --defaults-file=$CONFIG_FILE start_replica_assistant | sed -z -e "s/\n/ /g")
