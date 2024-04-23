@@ -89,15 +89,14 @@ The Mariadb Start Replica Assistant can skip over about 500 errors per minute on
 If the script is running and not finishing, you can quit out of the script by pressing CTRL+c. Look in the `/tmp` directory for a log of what was done up to that point.
 
 There are two ways to make the script faster:
-`--skip_multiplier=100`
-This option will increase the number of sql events skipped in the binlog. The default is 1. If you increase it to 100, it will perform this option:
+* `--skip_multiplier=100` This option will increase the number of sql events skipped in the binlog. The default is 1. If you increase it to 100, it will perform this option:
 ```SQL
 set global sql_slave_skip_counter=100; start slave;
 ```
-This will allow the script to skip 100 binlog events at a time, completing its task much faster. However, it will also skip a few transactions in the binlog that would otherwise succeed. If you don't want to lose valid transactions, do not change this option.
+This option will skip 100 binlog events at a time, completing its task incredibly fast. However, it will also skip some transactions at the end of the final skip, that would otherwise succeed. If you don't want to lose valid transactions, do not change this option.
 
 `--milliseconds=25`
-A pause is necessary between each skipped error and the check to see if there is another error. The default is `50`. You can lower this number safely to make the script run a little faster. If it is too low, the script will exit early and provide a warning: `This script exited early. Increase milliseconds to avoid this issue.`
+* A pause is necessary between each skipped error and the check to see if the next binlog even produces an error. The default is `50`. You can lower this number safely to make the script run a little faster. If it is too low, the script will exit early and provide a warning: `This script exited early. Increase milliseconds to avoid this issue.`
 
 ### Sharing Results With MariaDB Support
 When the script completes, it will output the name of a logfile that you can share in a Mariadb support ticket:
