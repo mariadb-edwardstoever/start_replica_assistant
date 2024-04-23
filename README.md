@@ -43,18 +43,19 @@ Binlog Events Skipped: 300
 ### Available Options
 ```
 This script can be run without options. Not indicating an option value will use the default.
+  --conn_name=MYREPLICA # This is only required when multiple named slave connections exist.
   --skip_multiplier=100 # How many binlog events to skip from the primary at a time, default 1.
-                        # Skipping multiples will speed up the process of finding the first transaction 
-                        # that does not fail. Skipping multiples can also lead to skipping transactions 
+                        # Skipping multiples will speed up the process of finding the first transaction
+                        # that does not fail. Skipping multiples can also lead to skipping transactions
                         # that would otherwise succeed. For more details, review the file README.md.
   --milliseconds=75     # Pause between each error skipped in miliseconds. Default 50.
   --nocolor             # Do not display with color letters
-  --nolog               # Do not write a logfile into directory ${TMPDIR}
+  --nolog               # Do not write a logfile into directory /tmp
   --bypass_priv_check   # Bypass the check that the database user has sufficient privileges.
   --test                # Test connect to database and display script version.
   --version             # Test connect to database and display script version.
   --help                # Display the help menu
-  ```
+```
   
 ### Connecting from the database host
 The most simple method for running Mariadb Start Replica Assistant is via unix_socket as root on the database host of the replica with errors. If you want another user to connect to the database, add a user and password to the file `assistant.cnf`. Remember the configuration must be to connect to the replica.
@@ -96,6 +97,12 @@ set global sql_slave_skip_counter=100; start slave;
 This option will skip 100 binlog events at a time, completing its task incredibly fast. However, it will also skip some transactions at the end of the final skip, that would otherwise succeed. If you don't want to lose valid transactions, do not change this option.
 
 * `--milliseconds=25` A pause is necessary between each skipped error and the check to see if the next binlog even produces an error. The default is `50`. You can lower this number safely to make the script run a little faster. If it is too low, the script will exit early and provide a warning: `This script exited early. Increase milliseconds to avoid this issue.`
+
+### Named Slave connections
+If you have only one slave and it has a named connection, the Start Replica Assistant will discover the name for you. If you have multiple named slave connections, you can indicate the one that you want the script to work on using the following syntax:
+```
+./start_replica_assistant.sh --conn_name=MYREPLICA
+```
 
 ### Sharing Results With MariaDB Support
 When the script completes, it will output the name of a logfile that you can share in a Mariadb support ticket:

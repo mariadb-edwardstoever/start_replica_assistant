@@ -31,6 +31,7 @@ if [ ! $SCRIPT_VERSION ]; then  die "Do not run this script directly. Read the f
 
 function display_help_message() {
 printf "This script can be run without options. Not indicating an option value will use the default.
+  --conn_name=MYREPLICA # This is only required when multiple named slave connections exist. 
   --skip_multiplier=100 # How many binlog events to skip from the primary at a time, default 1.
                         # Skipping multiples will speed up the process of finding the first transaction 
                         # that does not fail. Skipping multiples can also lead to skipping transactions 
@@ -324,15 +325,6 @@ function gtid_strict_mode_at_script_start() {
   GTID_STRICT_MODE_AT_SCRIPT_START=$($CMD_MARIADB $CLOPTS -ABNe "$GTID_STRICT_SQL")
 }
 
-# function master_use_gtid_at_script_start() {
-# local STATUS_SQL="SHOW SLAVE STATUS\G"
-#  if [ $DEFAULT_CONNECTION_NAME ]; then
-#    local STATUS_SQL="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${STATUS_SQL}"
-#  fi
-#  local SLAVE_STATUS=$($CMD_MARIADB $CLOPTS -Ae "$STATUS_SQL" | sed  's/\%/\%\%/g') # -- printf will gag on one %  
-#  MASTER_USE_GTID_AT_SCRIPT_START=$(printf  "$SLAVE_STATUS" | grep -i Using_Gtid | cut -d':' -f2- | awk '{$1=$1};1')
-#}
-
 function set_sql_slave_skip_counter_to_zero(){
   if [ "$MLTP" == "1" ]; then return; fi
   local SQL_SLAVE_SKIP_COUNTER="stop slave; set global sql_slave_skip_counter=0; start slave;"; 
@@ -397,6 +389,7 @@ fi
        TEMP_COLOR=lmagenta; print_color "\nUsing slave connection name ${DEFAULT_CONNECTION_NAME} as default.\n\n"; unset TEMP_COLOR;
      else
        TEMP_COLOR=lred; print_color "\n--conn_name=${CONN_NAME} is not a valid connection name.\n\n"; unset TEMP_COLOR;
+       exit 0
      fi
      return
    fi
