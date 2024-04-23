@@ -16,7 +16,8 @@ display_title
 start_message
 check_required_privs
 gtid_strict_mode_at_script_start
-master_use_gtid_at_script_start
+# master_use_gtid_at_script_start
+is_there_one_named_connection
 set_slave_status_vars
 
 is_replica

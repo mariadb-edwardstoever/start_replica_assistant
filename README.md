@@ -100,5 +100,6 @@ This option will skip 100 binlog events at a time, completing its task incredibl
 ### Sharing Results With MariaDB Support
 When the script completes, it will output the name of a logfile that you can share in a Mariadb support ticket:
 ```
-The logfile /tmp/start_replica_assistant_0423_094947.log contains the details from running this script.
+The logfile /tmp/start_replica_assistant_0423_094947.log 
+contains the details from running this script.
 ```

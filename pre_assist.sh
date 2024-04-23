@@ -14,6 +14,8 @@ SECONDS=0
 MLLS=50 # milliseconds pause between each skip, if lower than 300, script may stop prematurely
 MLTP=1  # how many binlog events to skip from the primary at a time, default 1.
 SKIPPED_EVENTS=0
+unset DEFAULT_CONNECTION_NAME
+
 
 function ts() {
    TS=$(date +%F-%T | tr ':-' '_')
@@ -245,10 +247,16 @@ fi
 
 function skip_this_err(){
 SKIP_SQL="set global sql_slave_skip_counter=${MLTP}; start slave; do sleep(${MLLS}/1000);" 
+if [ $DEFAULT_CONNECTION_NAME ]; then
+  SKIP_SQL="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${SKIP_SQL}"
+fi
 if [ "$IO_ERRNO" == "0" ]; then
   case "$SQL_ERRNO" in
     "1950")
       local TURN_OFF_STRICT_MODE_SQL="STOP SLAVE; set global gtid_strict_mode=OFF; do sleep(0.1); START SLAVE; do sleep(1);"
+      if [ $DEFAULT_CONNECTION_NAME ]; then
+        local TURN_OFF_STRICT_MODE_SQL="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${TURN_OFF_STRICT_MODE_SQL}"
+      fi
       TEMP_COLOR=lred;   print_color "Setting global gtid_strict_mode = OFF\n"; unset TEMP_COLOR;
       $CMD_MARIADB $CLOPTS -ABNe "$TURN_OFF_STRICT_MODE_SQL"
       VAR_REPORT+=("$ERR_CODE")
@@ -268,6 +276,10 @@ else
     "1236")
     local SWITCH_MASTER_USE_GTID_TO_SLAVE_POS="STOP SLAVE; CHANGE MASTER TO MASTER_USE_GTID = slave_pos; START SLAVE; do sleep(1);"
     
+  if [ $DEFAULT_CONNECTION_NAME ]; then
+    SWITCH_MASTER_USE_GTID_TO_SLAVE_POS="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${SWITCH_MASTER_USE_GTID_TO_SLAVE_POS}"
+  fi
+    
     if [ "$MASTER_USE_GTID_AT_SCRIPT_START" == "Current_Pos" ] && [ $(echo $IO_ERR| grep -i "connecting slave requested to start from GTID"| awk '{print $1}') ]; then
       TEMP_COLOR=lred;   print_color "Switching to MASTER_USE_GTID = slave_pos\n"; unset TEMP_COLOR;
       $CMD_MARIADB $CLOPTS -ABNe "${SWITCH_MASTER_USE_GTID_TO_SLAVE_POS}"
@@ -277,6 +289,8 @@ else
       TEMP_COLOR=lgreen; print_color "\n============================================\n"; unset TEMP_COLOR;
     else
       echo "This IO error is not handled by this script";
+      echo "$MASTER_USE_GTID_AT_SCRIPT_START"
+      echo OK
       exit 0
     fi
 ;;
@@ -310,11 +324,14 @@ function gtid_strict_mode_at_script_start() {
   GTID_STRICT_MODE_AT_SCRIPT_START=$($CMD_MARIADB $CLOPTS -ABNe "$GTID_STRICT_SQL")
 }
 
-function master_use_gtid_at_script_start() {
-  local STATUS_SQL="SHOW SLAVE STATUS\G"
-  local SLAVE_STATUS=$($CMD_MARIADB $CLOPTS -Ae "$STATUS_SQL" | sed  's/\%/\%\%/g') # -- printf will gag on one %  
-  MASTER_USE_GTID_AT_SCRIPT_START=$(printf  "$SLAVE_STATUS" | grep -i Using_Gtid | cut -d':' -f2- | awk '{$1=$1};1')
-}
+# function master_use_gtid_at_script_start() {
+# local STATUS_SQL="SHOW SLAVE STATUS\G"
+#  if [ $DEFAULT_CONNECTION_NAME ]; then
+#    local STATUS_SQL="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${STATUS_SQL}"
+#  fi
+#  local SLAVE_STATUS=$($CMD_MARIADB $CLOPTS -Ae "$STATUS_SQL" | sed  's/\%/\%\%/g') # -- printf will gag on one %  
+#  MASTER_USE_GTID_AT_SCRIPT_START=$(printf  "$SLAVE_STATUS" | grep -i Using_Gtid | cut -d':' -f2- | awk '{$1=$1};1')
+#}
 
 function set_sql_slave_skip_counter_to_zero(){
   if [ "$MLTP" == "1" ]; then return; fi
@@ -354,9 +371,47 @@ function return_master_use_gtid_to_start_value(){
   $CMD_MARIADB $CLOPTS -ABNe "$RETURN_GTID_MASTER_USE_GTID_SQL"
 }
 
+function is_there_one_named_connection(){
+ local ALL_STATUS_SQL="SHOW ALL SLAVES STATUS\G"
+ ALL_STATUS=$($CMD_MARIADB $CLOPTS -Ae "$ALL_STATUS_SQL" | sed  's/\%/\%\%/g') # -- printf will gag on one % 
+ CONNECTION_NAMES_COUNT=$(printf  "$ALL_STATUS" | grep -i Connection_name  | wc -l)
+if [ $CONN_NAME ]; then
+  CONN_NAME_IS_VALID=$(printf  "$ALL_STATUS" | grep -i Connection_name  | grep $CONN_NAME | wc -l)
+fi
+ if [ "$CONNECTION_NAMES_COUNT" == "0" ]; then
+   TEMP_COLOR=lred; print_color "\nThere are no slaves.\n\n"; unset TEMP_COLOR;
+   exit 0
+ fi
+ if [ "$CONNECTION_NAMES_COUNT" == "1" ]; then
+   DEFAULT_CONNECTION_NAME=$(printf  "$ALL_STATUS" | grep -i Connection_name | cut -d':' -f2- | awk '{$1=$1};1')
+ fi
+ if [ "$CONNECTION_NAMES_COUNT" == "1" ] && [ ! "$DEFAULT_CONNECTION_NAME" ]; then
+   # THERE IS ONE CONNECTION, NOT NAMED
+   return;
+ fi
+ if [ ! "$DEFAULT_CONNECTION_NAME" ]; then
+# DEFAULT_CONNECTION_NAME which comes from system overrides one provided by user.
+   if [ $CONN_NAME ]; then
+     if [ "$CONN_NAME_IS_VALID" == "1" ]; then
+       DEFAULT_CONNECTION_NAME="$CONN_NAME"
+       TEMP_COLOR=lmagenta; print_color "\nUsing slave connection name ${DEFAULT_CONNECTION_NAME} as default.\n\n"; unset TEMP_COLOR;
+     else
+       TEMP_COLOR=lred; print_color "\n--conn_name=${CONN_NAME} is not a valid connection name.\n\n"; unset TEMP_COLOR;
+     fi
+     return
+   fi
+    TEMP_COLOR=lred; print_color "\nThere are ${CONNECTION_NAMES_COUNT} named replication connections. You must indicate one.\n\n"; unset TEMP_COLOR;
+    exit 0
+ fi
+# IF YOU HAVE GOTTEN THIS FAR, THERE IS ONE CONNECTION NAME, AND IT IS THE DEFAULT
+TEMP_COLOR=lmagenta; print_color "\nUsing slave connection name ${DEFAULT_CONNECTION_NAME} as default.\n\n"; unset TEMP_COLOR;
+}
 
 function set_slave_status_vars() {
   STATUS_SQL="SHOW SLAVE STATUS\G"
+  if [ $DEFAULT_CONNECTION_NAME ]; then
+    STATUS_SQL="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${STATUS_SQL}"
+  fi
   SLAVE_POS_SQL="select VARIABLE_VALUE from information_schema.GLOBAL_VARIABLES where variable_name='GTID_SLAVE_POS';"
   GTID_STRICT_SQL="select VARIABLE_VALUE from information_schema.GLOBAL_VARIABLES where VARIABLE_NAME='GTID_STRICT_MODE';"
   SLAVE_STATUS=$($CMD_MARIADB $CLOPTS -Ae "$STATUS_SQL" | sed  's/\%/\%\%/g') # -- printf will gag on one %  
@@ -369,6 +424,7 @@ function set_slave_status_vars() {
 GTID_IO_POS=$(printf  "$SLAVE_STATUS" | grep -i Gtid_IO_Pos    | cut -d':' -f2- | awk '{$1=$1};1')
  USING_GTID=$(printf  "$SLAVE_STATUS" | grep -i Using_Gtid     | cut -d':' -f2- | awk '{$1=$1};1')
     TX_TYPE=$(type_of_transaction "$SQL_ERR")
+    MASTER_USE_GTID_AT_SCRIPT_START="$USING_GTID"
    ERR_CODE="${SQL_ERRNO}_${TX_TYPE}"
 }
 
@@ -405,6 +461,9 @@ fi
 
 final_check_for_slave_error(){
   STATUS_SQL="do sleep(0.5); SHOW SLAVE STATUS\G"
+  if [ $DEFAULT_CONNECTION_NAME ]; then
+    STATUS_SQL="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${STATUS_SQL}"
+  fi
   SLAVE_STATUS=$($CMD_MARIADB $CLOPTS -Ae "$STATUS_SQL" | sed  's/\%/\%\%/g') # -- printf will gag on one %  
       IO_ERRNO=$(printf  "$SLAVE_STATUS" | grep -i Last_IO_Errno  | cut -d':' -f2- | awk '{$1=$1};1')
      SQL_ERRNO=$(printf  "$SLAVE_STATUS" | grep -i Last_SQL_Errno | cut -d':' -f2- | awk '{$1=$1};1') 
@@ -481,6 +540,15 @@ if [ $(echo "$params"|sed 's,=.*,,') == '--milliseconds' ]; then
    INVALID_INPUT="$params"; 
   else 
    VALID=TRUE; 
+  fi
+fi
+if [ $(echo "$params"|sed 's,=.*,,') == '--conn_name' ]; then
+  CONN_NAME=$(echo "$params" | sed 's/.*=//g');
+  if [ "$CONN_NAME" == '--conn_name' ]; then unset CONN_NAME; fi
+  if [ ! $CONN_NAME ]; then
+   INVALID_INPUT="$params";
+  else
+   VALID=TRUE;
   fi
 fi
   if [ "$params" == '--bypass_priv_check' ]; then BYPASS_PRIV_CHECK='TRUE'; VALID=TRUE; fi
