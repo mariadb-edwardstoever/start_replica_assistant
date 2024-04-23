@@ -84,7 +84,7 @@ GRANT SUPER on *.* to 'admin'@'%';
 ```
 
 ### Interactive Options
-You will be offered 3 options when the script encounters its first error blocking replication. You can press __c__ to skip over this error and continue to the next error. You can press __a__ to auto-skip all errors like this error. You can press __e__ to skip everything which will run until there are no more errors found. Pressing any other key will exit the script. Errors 1236 and 1950 are not skipped in the same sense as typical SQL errors. These errors are skipped over with a temporary fix.
+You will be offered 3 options when the script encounters its first error blocking replication. You can press __c__ to skip over this error and continue to the next error. You can press __a__ to auto-skip all errors like this error. You can press __e__ to skip everything which will run until there are no more errors found. Pressing any other key will exit the script. Errors 1236 and 1950 are skipped over with a temporary fix.
 ```
 ------------- CHOOSE AN OPTION -------------
 Press c to continue. Slave will skip only this occurrence.
