@@ -95,8 +95,7 @@ set global sql_slave_skip_counter=100; start slave;
 ```
 This option will skip 100 binlog events at a time, completing its task incredibly fast. However, it will also skip some transactions at the end of the final skip, that would otherwise succeed. If you don't want to lose valid transactions, do not change this option.
 
-`--milliseconds=25`
-* A pause is necessary between each skipped error and the check to see if the next binlog even produces an error. The default is `50`. You can lower this number safely to make the script run a little faster. If it is too low, the script will exit early and provide a warning: `This script exited early. Increase milliseconds to avoid this issue.`
+* `--milliseconds=25` A pause is necessary between each skipped error and the check to see if the next binlog even produces an error. The default is `50`. You can lower this number safely to make the script run a little faster. If it is too low, the script will exit early and provide a warning: `This script exited early. Increase milliseconds to avoid this issue.`
 
 ### Sharing Results With MariaDB Support
 When the script completes, it will output the name of a logfile that you can share in a Mariadb support ticket:
