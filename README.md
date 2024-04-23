@@ -112,7 +112,9 @@ The Start Replica Assistant does not test for divergence or fix divergence. It c
 * 1032 DELETE - Occurs when a deleted row on the master does not exist on the slave. It is not likely the slave will be divergent when this error is skipped.
 * 1032 UPDATE - Occurs when a row that is updated on the master does not exist on the slave. This is usually a problem. The row should be there.
 
-If you think that there is an unacceptable level of divergence on the slave, you probably should refresh the slave from a recent backup of the master and restart replication.
+If you think that there is an unacceptable level of divergence on the slave, you can refresh the slave from a recent backup of the master and restart replication. This will depend on your tolerance for divergence in the tables involved.
+
+A method for testing if a table is divergent is the [CHECKSUM TABLE](https://mariadb.com/kb/en/checksum-table/) command.
 
 ### Sharing Results With MariaDB Support
 When the script completes, it will output the name of a logfile that you can share in a Mariadb support ticket:
