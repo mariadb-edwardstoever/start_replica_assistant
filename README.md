@@ -110,7 +110,7 @@ The Start Replica Assistant does not test for divergence or fix divergence. It c
 * 1950 - An attempt was made to binlog GTID 0-10-1617460 which would create an out-of-order sequence number... This means that a change was made directly on the slave. It usually leads to more errors but does not indicate divergence.
 * 1062 INSERT - Usually occurs when row(s) were inserted on the slave first by mistake. It is not likely the slave will be divergent when this error is skipped.
 * 1032 DELETE - Occurs when a deleted row on the master does not exist on the slave. It is not likely the slave will be divergent when this error is skipped.
-* 1032 UPDATE - Occurs when a row that is updated does not exist on the slave. This is usually a problem. The row should be there.
+* 1032 UPDATE - Occurs when a row that is updated on the master does not exist on the slave. This is usually a problem. The row should be there.
 
 If you think that there is an unacceptable level of divergence on the slave, you probably should refresh the slave from a recent backup of the master and restart replication.
 
