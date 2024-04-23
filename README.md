@@ -11,9 +11,9 @@ wget https://github.com/mariadb-edwardstoever/start_replica_assistant/archive/re
 
 ### What will the Mariadb Start Replica Assistant do?
 The Start Replica Assistant will make the task of restarting the slave process for asynchronous or semi-synchronous replication much easier. It can quickly fix or skip over the most common errors and log each step that it takes. The script will handle these errors:
-* IO ERROR 1236: Switch to MASTER_USE_GTID = slave_pos (returning it to current_pos at end of script)
-* SQL ERROR 1950: Set global gtid_strict_mode = OFF (returning it to ON at end of script)
-* OTHER SQL ERRORS: set global sql_slave_skip_counter=(a number)
+* __IO ERROR 1236__ - Switch to MASTER_USE_GTID = slave_pos (returning it to current_pos at end of script)
+* __SQL ERROR 1950__ - Set global gtid_strict_mode = OFF (returning it to ON at end of script)
+* __OTHER SQL ERRORS__ - set global sql_slave_skip_counter=(a number)
 
 When the script completes, it will provide you with a final report of the count of each type of error that it skipped. For example:
 ```
