@@ -237,10 +237,11 @@ fi
    printf "    ERROR MESSAGE: "; TEMP_COLOR=lcyan;   print_color "$IO_ERR\n"; unset TEMP_COLOR;
   fi
 if [ "$IO_ERRNO" != "0" ] || [ "$SQL_ERRNO" != "0" ]; then 
+  if [ "$IO_ERRNO" != "0" ]; then local ERR_NO="$IO_ERRNO"; else ERR_NO="$SQL_ERRNO"; fi
   if [ "$REQUEST_RESPONSE" ]; then
      TEMP_COLOR=lgreen; print_color "\n------------- CHOOSE AN OPTION -------------\n"; unset TEMP_COLOR;
      printf "Press "; TEMP_COLOR=lred; print_color "c";  printf " to "; print_color "continue"; printf ". Slave will skip only this occurrence.\n"; unset TEMP_COLOR;
-     printf "Press "; TEMP_COLOR=lred; print_color "a";  printf " to "; print_color "auto-skip"; printf ". Slave will skip all occurrences of ${SQL_ERRNO} (${TX_TYPE}).\n"; unset TEMP_COLOR;
+     printf "Press "; TEMP_COLOR=lred; print_color "a";  printf " to "; print_color "auto-skip"; printf ". Slave will skip all occurrences of ${ERR_NO} (${TX_TYPE}).\n"; unset TEMP_COLOR;
      printf "Press "; TEMP_COLOR=lred; print_color "e"; printf " to "; print_color "everything"; printf ". Slave will skip every error possible.\n"; unset TEMP_COLOR;
   fi
 fi
@@ -289,14 +290,16 @@ else
       logit
       TEMP_COLOR=lgreen; print_color "\n============================================\n"; unset TEMP_COLOR;
     else
-      echo "This IO error is not handled by this script";
-      echo "$MASTER_USE_GTID_AT_SCRIPT_START"
-      echo OK
+      if [ $(echo $IO_ERR| grep -i "Required binlog files have been purged." | awk '{print $1}') ]; then
+            TEMP_COLOR=lred; print_color "\nMaster does not have required binlog.\nThis IO error is not handled by this script.\n\n"; unset TEMP_COLOR
+      else
+        echo "This IO error is not handled by this script.";
+      fi
       exit 0
     fi
 ;;
     *)
-    echo "This IO error is not handled by this script";
+    echo "This IO error is not handled by this script.";
     exit 0
 ;;
   esac
@@ -321,6 +324,7 @@ function no_errors() {
 }
 
 function gtid_strict_mode_at_script_start() {
+  # GTID_STRICT_MODE is not tied to a specific named connection
   local GTID_STRICT_SQL="select VARIABLE_VALUE from information_schema.GLOBAL_VARIABLES where VARIABLE_NAME='GTID_STRICT_MODE';"
   GTID_STRICT_MODE_AT_SCRIPT_START=$($CMD_MARIADB $CLOPTS -ABNe "$GTID_STRICT_SQL")
 }
@@ -356,6 +360,7 @@ function set_sql_slave_skip_counter_to_zero(){
 }
 
 function return_gtid_strict_mode_to_start_value(){
+  # GTID_STRICT_MODE is not tied to a specific named connection
   if [ ! $GTID_STRICT_MODE_AT_SCRIPT_START ]; then return; fi
   if [ ! $GTID_STRICT_MODE_WAS_CHANGED ]; then return; fi
   local MSG="Setting global gtid_strict_mode = ${GTID_STRICT_MODE_AT_SCRIPT_START}\n"
@@ -421,6 +426,28 @@ fi
 TEMP_COLOR=lmagenta; print_color "\nUsing slave connection name ${DEFAULT_CONNECTION_NAME} as default.\n\n"; unset TEMP_COLOR;
 }
 
+function start_replica(){
+if [ "$SQL_STATE" == "YES" ] || [ "$IO_STATE" == "YES" ]; then return; fi
+
+  TEMP_COLOR=lgreen; print_color "The slave is not started. Start the slave?\n" unset TEMP_COLOR;
+  printf "Press "; TEMP_COLOR=lred; print_color "y"; unset TEMP_COLOR; printf " to start the slave and continue. Any other key to exit.\n\n"; 
+  read -s -n 1 START_SLAVE_YES;
+case "$START_SLAVE_YES" in 
+   y | Y)
+  SQL_START_SLAVE="stop slave; do sleep(0.5); start slave;"
+  if [ $DEFAULT_CONNECTION_NAME ]; then
+    SQL_START_SLAVE="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${SQL_START_SLAVE}"
+  fi
+  $CMD_MARIADB $CLOPTS -Ae "$SQL_START_SLAVE" 
+;;
+
+   *)
+   echo "exiting..."
+   exit 0
+;;
+esac
+}
+
 function set_slave_status_vars() {
   STATUS_SQL="SHOW SLAVE STATUS\G"
   if [ $DEFAULT_CONNECTION_NAME ]; then
@@ -437,6 +464,8 @@ function set_slave_status_vars() {
     SQL_ERR=$(printf  "$SLAVE_STATUS" | grep -i Last_SQL_Error | cut -d':' -f2- | awk '{$1=$1};1' | sed  "s/\%/\%\%/g" | sed "s/\`//g")  # -- printf will gag on one %  
 GTID_IO_POS=$(printf  "$SLAVE_STATUS" | grep -i Gtid_IO_Pos    | cut -d':' -f2- | awk '{$1=$1};1')
  USING_GTID=$(printf  "$SLAVE_STATUS" | grep -i Using_Gtid     | cut -d':' -f2- | awk '{$1=$1};1')
+  SQL_STATE=$(printf  "$SLAVE_STATUS" | grep -i Slave_SQL_Running | grep -i -v Slave_SQL_Running_State | cut -d':' -f2- | awk '{$1=$1};1' | awk '{print toupper($0)}' )
+   IO_STATE=$(printf  "$SLAVE_STATUS" | grep -i Slave_IO_Running | cut -d':' -f2- | awk '{$1=$1};1' | awk '{print toupper($0)}' )
     TX_TYPE=$(type_of_transaction "$SQL_ERR")
    if [ ! "$MASTER_USE_GTID_AT_SCRIPT_START" ]; then MASTER_USE_GTID_AT_SCRIPT_START="$USING_GTID"; fi
    ERR_CODE="${SQL_ERRNO}_${TX_TYPE}"
@@ -495,7 +524,7 @@ fi
 }
 
 function check_required_privs() {
-local SQL="delimiter //
+local PRIVS_SQL="delimiter //
 begin not atomic
 set @HAS_SUPER='NONE';
 select PRIVILEGE_TYPE into @HAS_SUPER 
@@ -526,7 +555,7 @@ end;
 //
 delimiter ;"
   if [ ! "$BYPASS_PRIV_CHECK" == "TRUE" ]; then
-      ERR=$($CMD_MARIADB $CLOPTS -Ae "$SQL")
+      ERR=$($CMD_MARIADB $CLOPTS -Ae "$PRIVS_SQL")
       if [ "$ERR" ]; then die "$ERR"; fi
   fi
 }

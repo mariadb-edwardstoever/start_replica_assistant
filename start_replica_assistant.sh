@@ -21,6 +21,7 @@ is_there_one_named_connection
 set_slave_status_vars
 
 is_replica
+start_replica
 no_errors
 
 while [[ "$IO_ERRNO" != "0" || "$SQL_ERRNO" != "0" ]]; do
