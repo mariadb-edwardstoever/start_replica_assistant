@@ -184,44 +184,44 @@ function check_request_response(){
 }
 
 function display_error_skip_message(){
-local MNG="Unexpected error." #DEFAULT VALUE
-local FACTOR="Unknown."       #DEFAULT VALUE
+MNG="Unexpected error." #DEFAULT VALUE
+FACTOR="Unknown."       #DEFAULT VALUE
   if [ "$SQL_ERRNO" != "0" ]; then
-   if [ "$SQL_ERRNO" == "1062" ] && [ "$TX_TYPE" == "WRITE_ROWS_V1" ]; then 
-     local MNG="Row with specific primary/unique key inserted on master already exists on slave. Perhaps inserted on slave first."; 
-     local FACTOR="Low probability of divergence."
+   if [ "$SQL_ERRNO" == "1062" ]; then 
+     MNG="Row with specific primary/unique key inserted on master already exists on slave. Perhaps inserted on slave first."; 
+     FACTOR="Low probability of divergence."
    fi
    if [ "$SQL_ERRNO" == "1032" ]; then
      if [ "$TX_TYPE" == "DELETE_ROWS_V1" ]; then
-      local MNG="Row deleted on master does not exists on slave. Perhaps deleted on slave first."; 
-      local FACTOR="Low probability of divergence."
+      MNG="Row deleted on master does not exists on slave. Perhaps deleted on slave first."; 
+      FACTOR="Low probability of divergence."
      fi
      if [ "$TX_TYPE" == "UPDATE_ROWS_V1" ]; then 
-      local MNG="Row updated on master does not exists on slave."; 
-      local FACTOR="Divergence exists in slave."
+      MNG="Row updated on master does not exists on slave."; 
+      FACTOR="Divergence exists in slave."
      fi
    fi
    if [ "$SQL_ERRNO" == "1146" ]; then 
-     local MNG="Row event on master but table does not exists on slave."; 
-     local FACTOR="Divergence exists in slave."
+     MNG="Row event on master but table does not exists on slave."; 
+     FACTOR="Divergence exists in slave."
    fi
    if [ "$SQL_ERRNO" == "1396" ]; then 
      if [ "$TX_TYPE" == "CREATE_USER" ]; then
-      local MNG="CREATE USER failed on slave. Perhaps account already exists on slave."; 
-      local FACTOR="Password and privileges could be different on slave."
+      MNG="CREATE USER failed on slave. Perhaps account already exists on slave."; 
+      FACTOR="Password and privileges could be different on slave."
      fi
      if [ "$TX_TYPE" == "ALTER_USER" ]; then
-      local MNG="ALTER USER failed on slave. Account does not exist on slave."; 
-      local FACTOR="Can be fixed by creating user on slave."
+      MNG="ALTER USER failed on slave. Account does not exist on slave."; 
+      FACTOR="Can be fixed by creating user on slave."
      fi
      if [ "$TX_TYPE" == "DROP_USER" ]; then
-      local MNG="DROP USER failed on slave. Account does not exist on slave."; 
-      local FACTOR="Low probability of divergence."
+      MNG="DROP USER failed on slave. Account does not exist on slave."; 
+      FACTOR="Low probability of divergence."
      fi
    fi
    if [ "$SQL_ERRNO" == "1054" ]; then 
-     local MNG="A Column is unknown on the slave. Table has different definition on slave."; 
-     local FACTOR="Divergence exists in slave regardless of skipping error."
+     MNG="A Column is unknown on the slave. Table has different definition on slave."; 
+     FACTOR="Divergence exists in slave regardless of skipping error."
    fi
    printf "       ERROR TYPE: "; TEMP_COLOR=lcyan;   print_color "SQL\n"; unset TEMP_COLOR;
    printf "       ERROR CODE: "; TEMP_COLOR=lcyan;   print_color "$SQL_ERRNO"; if [ "$TX_TYPE" ]; then print_color " (${TX_TYPE})"; fi;  unset TEMP_COLOR; printf "\n"
@@ -230,7 +230,7 @@ local FACTOR="Unknown."       #DEFAULT VALUE
    printf "    ERROR MESSAGE: "; TEMP_COLOR=lcyan;   print_color "$SQL_ERR\n"; unset TEMP_COLOR;
 fi
   if [ "$IO_ERRNO" != "0" ]; then
-   local FACTOR="Low probability of divergence."       #DEFAULT VALUE
+   FACTOR="Low probability of divergence."       #DEFAULT VALUE
    printf "       ERROR TYPE: "; TEMP_COLOR=lcyan;   print_color "IO\n"; unset TEMP_COLOR;
    printf "       ERROR CODE: "; TEMP_COLOR=lcyan;   print_color "$IO_ERRNO"; if [ "$TX_TYPE" ]; then print_color " (${TX_TYPE})"; fi;  unset TEMP_COLOR; printf "\n"
    printf "DIVERGENCE FACTOR: "; TEMP_COLOR=lcyan;   print_color "$FACTOR\n"; unset TEMP_COLOR;
@@ -254,6 +254,7 @@ fi
 if [ "$IO_ERRNO" == "0" ]; then
   case "$SQL_ERRNO" in
     "1950")
+      # THIS SEEMS TO REQUIRE A FULL SECOND DELAY AFTER set global gtid_strict_mode=OFF
       local TURN_OFF_STRICT_MODE_SQL="STOP SLAVE; set global gtid_strict_mode=OFF; do sleep(0.1); START SLAVE; do sleep(1);"
       if [ $DEFAULT_CONNECTION_NAME ]; then
         local TURN_OFF_STRICT_MODE_SQL="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${TURN_OFF_STRICT_MODE_SQL}"
@@ -267,7 +268,7 @@ if [ "$IO_ERRNO" == "0" ]; then
     *)
     $CMD_MARIADB $CLOPTS -ABNe "$SKIP_SQL"
     VAR_REPORT+=("$ERR_CODE")
-    SKIPPED_EVENTS=$((SKIPPED_EVENTS + 1))
+    SKIPPED_EVENTS=$((SKIPPED_EVENTS + MLTP))
     logit
    TEMP_COLOR=lgreen; print_color "\n============================================\n"; unset TEMP_COLOR;
 ;;
@@ -275,10 +276,9 @@ if [ "$IO_ERRNO" == "0" ]; then
 else
   case "$IO_ERRNO" in
     "1236")
-    local SWITCH_MASTER_USE_GTID_TO_SLAVE_POS="STOP SLAVE; CHANGE MASTER TO MASTER_USE_GTID = slave_pos; START SLAVE; do sleep(1);"
-    
+    local SWITCH_MASTER_USE_GTID_TO_SLAVE_POS="STOP SLAVE; CHANGE MASTER TO MASTER_USE_GTID = slave_pos; START SLAVE; do sleep(0.5);"  
   if [ $DEFAULT_CONNECTION_NAME ]; then
-    SWITCH_MASTER_USE_GTID_TO_SLAVE_POS="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${SWITCH_MASTER_USE_GTID_TO_SLAVE_POS}"
+    local SWITCH_MASTER_USE_GTID_TO_SLAVE_POS="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${SWITCH_MASTER_USE_GTID_TO_SLAVE_POS}"
   fi
     
     if [ "$MASTER_USE_GTID_AT_SCRIPT_START" == "Current_Pos" ] && [ $(echo $IO_ERR| grep -i "connecting slave requested to start from GTID"| awk '{print $1}') ]; then
@@ -327,12 +327,30 @@ function gtid_strict_mode_at_script_start() {
 
 function set_sql_slave_skip_counter_to_zero(){
   if [ "$MLTP" == "1" ]; then return; fi
+
+  local SQL_GET_SQL_SLAVE_SKIP_COUNTER="select VARIABLE_VALUE from information_schema.GLOBAL_VARIABLES where VARIABLE_NAME='SQL_SLAVE_SKIP_COUNTER';"
+  if [ $DEFAULT_CONNECTION_NAME ]; then
+     local SQL_GET_SQL_SLAVE_SKIP_COUNTER="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${SQL_GET_SQL_SLAVE_SKIP_COUNTER}"
+  fi
+  CURRENT_COUNTER=$($CMD_MARIADB $CLOPTS -ABNe "$SQL_GET_SQL_SLAVE_SKIP_COUNTER")
+  local MSG="\nGlobal variable sql_slave_skip_counter = ${CURRENT_COUNTER}\n"
+
+  if [ "$CURRENT_COUNTER" == "0" ]; then return;  fi
+
+  if [ $NOLOG ]; then
+   TEMP_COLOR=lmagenta; print_color "${MSG}"; unset TEMP_COLOR;
+  else
+   TEMP_COLOR=lmagenta; print_color "${MSG}"; unset TEMP_COLOR;  printf "${MSG}" >> ${LOG_FILE}; 
+  fi
   local SQL_SLAVE_SKIP_COUNTER="stop slave; set global sql_slave_skip_counter=0; start slave;"; 
-  local MSG="Setting sql_slave_skip_counter = 0"
+  if [ $DEFAULT_CONNECTION_NAME ]; then
+     local SQL_SLAVE_SKIP_COUNTER="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${SQL_SLAVE_SKIP_COUNTER}"
+  fi
+  local MSG="Setting global sql_slave_skip_counter = 0\n"
   if [ $NOLOG ]; then
     TEMP_COLOR=lred; print_color "${MSG}"; unset TEMP_COLOR;
   else
-    TEMP_COLOR=lred; print_color "${MSG}"; unset TEMP_COLOR; echo "${MSG}" >> ${LOG_FILE}; 
+    TEMP_COLOR=lred; print_color "${MSG}"; unset TEMP_COLOR; printf "${MSG}" >> ${LOG_FILE}; 
   fi
   $CMD_MARIADB $CLOPTS -ABNe "$SQL_SLAVE_SKIP_COUNTER"
 }
@@ -354,6 +372,9 @@ function return_master_use_gtid_to_start_value(){
   if [ ! $MASTER_USE_GTID_AT_SCRIPT_START ]; then return; fi
   if [ ! $MASTER_USE_GTID_WAS_CHANGED ]; then return; fi
   local RETURN_GTID_MASTER_USE_GTID_SQL="STOP SLAVE; CHANGE MASTER TO MASTER_USE_GTID = ${MASTER_USE_GTID_AT_SCRIPT_START}; START SLAVE;"
+  if [ $DEFAULT_CONNECTION_NAME ]; then
+     local RETURN_GTID_MASTER_USE_GTID_SQL="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${RETURN_GTID_MASTER_USE_GTID_SQL}"
+  fi
   local MSG="Switching to MASTER_USE_GTID = ${MASTER_USE_GTID_AT_SCRIPT_START}\n"
   if [ $NOLOG ]; then
     TEMP_COLOR=lred; print_color "${MSG}"; unset TEMP_COLOR;
@@ -417,7 +438,7 @@ function set_slave_status_vars() {
 GTID_IO_POS=$(printf  "$SLAVE_STATUS" | grep -i Gtid_IO_Pos    | cut -d':' -f2- | awk '{$1=$1};1')
  USING_GTID=$(printf  "$SLAVE_STATUS" | grep -i Using_Gtid     | cut -d':' -f2- | awk '{$1=$1};1')
     TX_TYPE=$(type_of_transaction "$SQL_ERR")
-    MASTER_USE_GTID_AT_SCRIPT_START="$USING_GTID"
+   if [ ! "$MASTER_USE_GTID_AT_SCRIPT_START" ]; then MASTER_USE_GTID_AT_SCRIPT_START="$USING_GTID"; fi
    ERR_CODE="${SQL_ERRNO}_${TX_TYPE}"
 }
 
@@ -442,6 +463,7 @@ fi
 }
 
 function display_report(){
+if [ "$MLTP" != "1" ]; then return; fi
  if [ "${#VAR_REPORT[@]}" == "0" ]; then return; fi
 if [ $NOLOG ]; then
   printf "\n\n COUNT   SKIPPED ERROR\n------- --------------------------\n"  
@@ -452,7 +474,12 @@ if [ $NOLOG ]; then
 fi
 }
 
-final_check_for_slave_error(){
+function early_exit(){
+  USER_INDICATED_EARLY_EXIT=true;
+}
+
+function final_check_for_slave_error(){
+  if [ $USER_INDICATED_EARLY_EXIT ]; then return; fi
   STATUS_SQL="do sleep(0.5); SHOW SLAVE STATUS\G"
   if [ $DEFAULT_CONNECTION_NAME ]; then
     STATUS_SQL="set default_master_connection='${DEFAULT_CONNECTION_NAME}'; ${STATUS_SQL}"
@@ -506,12 +533,13 @@ delimiter ;"
 
 display_final_message(){
 if [ -f "${LOG_FILE}" ]; then
+SKIPPED_EVENTS=$((SKIPPED_EVENTS - CURRENT_COUNTER))
  TEMP_COLOR=lmagenta; print_color "\nThe logfile ${LOG_FILE} contains the details from running this script.\n\n"; unset TEMP_COLOR;
  TEMP_COLOR=lcyan;   print_color "Elapsed time: "; unset TEMP_COLOR; printf "${SECONDS} seconds\n";
- TEMP_COLOR=lcyan;   print_color "Binlog Events Skipped: "; unset TEMP_COLOR; printf "${SKIPPED_EVENTS}\n\n";
+ if [ "$MLTP" == "1" ]; then TEMP_COLOR=lcyan;   print_color "Binlog Events Skipped: "; unset TEMP_COLOR; printf "${SKIPPED_EVENTS}\n\n"; fi
  if [ ! $NOLOG ]; then
    printf "\nElapsed time: ${SECONDS} seconds\n" >> ${LOG_FILE};
-   printf "Binlog Events Skipped: ${SKIPPED_EVENTS}\n\n"  >> ${LOG_FILE};
+   if [ "$MLTP" == "1" ]; then printf "Binlog Events Skipped: ${SKIPPED_EVENTS}\n\n"  >> ${LOG_FILE}; fi
  fi
 fi
 }

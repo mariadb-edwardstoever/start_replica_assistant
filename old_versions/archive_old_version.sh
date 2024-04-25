@@ -13,7 +13,7 @@ OUTDIR=${SCRIPT_DIR}/${SCRIPT_VERSION}
 echo $OUTDIR
 
 mkdir -p $OUTDIR
-find ./start_replica_assistant \( -path ./start_replica_assistant/old_versions -o -path ./start_replica_assistant/.git \) -prune -o -type f ! -name "*.tar.gz" | cpio -ov | bzip2 > ${OUTDIR}/quick_review_archive_${EPOCH}.cpio.bz2
+find ./start_replica_assistant \( -path ./start_replica_assistant/old_versions -o -path ./start_replica_assistant/.git -o -path ./start_replica_assistant/bin \) -prune -o -type f ! -name "*.tar.gz" | cpio -ov | bzip2 > ${OUTDIR}/quick_review_archive_${EPOCH}.cpio.bz2
 if [ -f ${OUTDIR}/start_replica_assistant_archive_${EPOCH}.cpio.bz2 ]; then
 echo "Archive created:"; ls -l ${OUTDIR}/quick_review_archive_${EPOCH}.cpio.bz2;
 else

@@ -84,7 +84,7 @@ GRANT SUPER on *.* to 'admin'@'%';
 ```
 
 ### Interactive Options
-You will be offered 3 options when the script encounters its first error blocking replication. You can press __c__ to skip over this error and continue to the next error. You can press __a__ to auto-skip all errors like this error. You can press __e__ to skip everything which will run until there are no more errors found. Pressing any other key will exit the script. Errors 1236 and 1950 are skipped over with a temporary fix.
+You will be offered 3 options when the script encounters its first error blocking replication. You can press __c__ to skip over this error and continue to the next error. You can press __a__ to auto-skip all errors like this error. You can press __e__ to skip everything which will run until there are no more errors found. Pressing any other key will exit the script. 
 ```
 ------------- CHOOSE AN OPTION -------------
 Press c to continue. Slave will skip only this occurrence.
@@ -99,11 +99,8 @@ The Mariadb Start Replica Assistant can skip over about 500 errors per minute on
 If the script is running and not finishing, you can quit out of the script by pressing CTRL+c. Look in the `/tmp` directory for a log of what was done up to that point.
 
 There are two ways to make the script faster:
-* `--skip_multiplier=100` This option will increase the number of sql events skipped in the binlog. The default is 1. If you increase it to 100, it will perform this option:
-```SQL
-set global sql_slave_skip_counter=100; start slave;
-```
-This option will skip 100 binlog events at a time, completing its task incredibly fast. However, it will also skip some transactions at the end of the final skip, that would otherwise succeed. If you don't want to lose valid transactions, do not change this option.
+* `--skip_multiplier=100` This option will increase the number of sql events skipped at a time. The default is 1. You can increase it to any number. The higher you go, the faster it will complete by skipping that many binlog events at a time. When the script finishes by finding no more SQL errors, it will set the value back to 0. If the master has waiting transactions in the binary logs, it is likely some valid SQL events will be skipped over in the milliseconds between finding no SQL errors and finishing the script. Furthermore, the log produced by the script will only include the first error in each batch of skipped errors and no final report displaying a count of error types will be produced.
+
 
 * `--milliseconds=25` A pause is necessary between each skipped error and the check to see if the next binlog even produces an error. The default is `50`. You can lower this number safely to make the script run a little faster. If it is too low, the script will exit early and provide a warning: `This script exited early. Increase milliseconds to avoid this issue.`
 

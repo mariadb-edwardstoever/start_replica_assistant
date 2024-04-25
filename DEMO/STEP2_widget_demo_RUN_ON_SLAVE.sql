@@ -1,4 +1,7 @@
+-- set default_master_connection='MYCONNECTION';
+
 use widget_demo;
+
 
 drop user `demo1`@`199.99.199.199`;
 drop user `demo2`@`199.99.199.199`;

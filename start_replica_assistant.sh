@@ -52,6 +52,7 @@ case "$RESPONSE" in
 ;;
    *)
    echo "exiting..."
+   early_exit
    break
 ;;
 esac
